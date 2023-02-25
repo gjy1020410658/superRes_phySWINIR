@@ -37,8 +37,8 @@ parser.add_argument('--epochs', type = int, default= 1)
 parser.add_argument('--seed',type =int, default= 0)
 args = parser.parse_args()
 
-torch.manual_seed(0)
-torch.cuda.manual_seed(0)
+torch.manual_seed(args.seed)
+torch.cuda.manual_seed(args.seed)
 torch.set_default_dtype(torch.float64)
 ########### Parameters ############
 BATCH_SIZE = args.batch_size # please try 32 it should okay 
