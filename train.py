@@ -28,7 +28,7 @@ from src.utli import *
 
 parser = argparse.ArgumentParser(description='training parameters')
 parser.add_argument('--loss_type', type =str ,default= 'L1')
-parser.add_argument('--phy_scale', type = float, default= 2,help= 'physics loss factor')
+parser.add_argument('--phy_scale', type = float, default= 0,help= 'physics loss factor')
 parser.add_argument('--FD_kernel', type = int, default= 3) # or 5
 parser.add_argument('--scale_factor', type = int, default= 8)
 parser.add_argument('--batch_size', type = int, default= 8)
