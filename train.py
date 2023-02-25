@@ -8,8 +8,7 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import numpy as np
 import matplotlib.pyplot as plt
 
-from scipy.io import savemat
-from scipy.io import loadmat
+
 import torch.nn.init as init
 from math import log10
 import torch.optim as optim
@@ -25,13 +24,14 @@ from tqdm import tqdm
 import h5py
 from src.models import *
 from src.utli import *
+from src.get_data import getdata
 
 parser = argparse.ArgumentParser(description='training parameters')
 parser.add_argument('--loss_type', type =str ,default= 'L1')
 parser.add_argument('--phy_scale', type = float, default= 0,help= 'physics loss factor')
 parser.add_argument('--FD_kernel', type = int, default= 3) # or 5
 parser.add_argument('--scale_factor', type = int, default= 8)
-parser.add_argument('--batch_size', type = int, default= 8)
+parser.add_argument('--batch_size', type = int, default= 16)
 parser.add_argument('--crop_size', type = int, default= 128, help= 'should be same as image dimension')
 parser.add_argument('--epochs', type = int, default= 1)
 parser.add_argument('--seed',type =int, default= 0)
@@ -48,43 +48,13 @@ nb_epochs = args.epochs # typically kernel will crush after 500 epochs
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 CROP_SIZE = args.crop_size
 gama = args.phy_scale
-########### loaddata ############
-f = h5py.File("nskt[256,uvw].h5", mode="r")
-w = f["w"][()]
-u = f["u"][()]
-v = f["v"][()]
-# in h5 file channel is for different sub-region
-
-print(w.shape) # (1800//3=600,2,256,256)
-print(u.shape)
-
-data_w = w[:,:,64:192,64:192]
-data_u = u[:,:,64:192,64:192]
-data_v = v[:,:,64:192,64:192]
-train_w = np.zeros((data_w.shape[0]*data_w.shape[1],1,data_w.shape[2],data_w.shape[3]))
-train_u = np.zeros((data_w.shape[0]*data_w.shape[1],1,data_w.shape[2],data_w.shape[3]))
-train_v = np.zeros((data_w.shape[0]*data_w.shape[1],1,data_w.shape[2],data_w.shape[3]))
-for i in range (data_w.shape[0]):
-    for j in range (data_w.shape[1]):
-        train_w[i+j,0,:,:] = data_w[i,j,...]
-        train_u[i+j,0,:,:] = data_u[i,j,...]
-        train_v[i+j,0,:,:] = data_v[i,j,...]
-traindata = np.concatenate((train_w,train_u,train_v),axis =1)
-# train : test : val = 8:1:1
-dataset = DatasetFromTensor(torch.tensor(traindata,dtype= torch.float64), CROP_SIZE = 128,scale_factor=scale_factor, with_bicubic_upsampling=False)
-
-trianset,testValset = random_split(dataset,[0.8,0.2],generator=torch.Generator().manual_seed(args.seed))
-valset,testset = random_split(dataset,[0.5,0.5],generator=torch.Generator().manual_seed(args.seed))
-
-trainloader = DataLoader(dataset=trianset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
-valloader =  DataLoader(dataset=valset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-testloader = DataLoader(dataset=testset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 data_dx = 2*np.pi/2048
-
+########### loaddata ############
+trainloader,valloader,_ = getdata(BATCH_SIZE = BATCH_SIZE,NUM_WORKERS =NUM_WORKERS,SEED=args.seed,CROP_SIZE = CROP_SIZE,SCALE_FACTOR = scale_factor)
 
 
 savedpath = str("model_SwinIR128_P_u." + str(args.scale_factor) + "_Loss_" + str(args.loss_type) + "_FD_kernel_" + str(args.FD_kernel) + "_gama_"
-                +str(args.phy_scale)
+                +str(args.phy_scale) + "_seed_" +str(args.seed)
                 )
 
 model = SwinIR(upscale=scale_factor, in_chans=3, img_size=CROP_SIZE, window_size=8, img_range=1., depths=[6, 6, 6, 6, 6, 6], embed_dim=180, num_heads=[6, 6, 6, 6, 6, 6], mlp_ratio=2, upsampler='pixelshuffle', resi_conv='1conv').to(device,dtype=torch.float64)
@@ -181,12 +151,12 @@ for epoch in range(nb_epochs):
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss,
-            'PSNR': avg_psnr
-            },savedpath + ".pt" ) # remember to change name for each experiment
+            'loss': epoch_loss / len(valloader),
+            'PSNR': avg_psnr / len(valloader)
+            },"results/"+savedpath + ".pt" ) # remember to change name for each experiment
 
 #model = best_model
-np.save('hist_loss_val_' + savedpath,np.array(hist_loss_val))
-np.save('hist_psnr_val_'+savedpath,np.array(hist_psnr_val))
-np.save('hist_loss_train_'+ savedpath,np.array(hist_loss_train))
-np.save('hist_psnr_train_' + savedpath,np.array(hist_psnr_train))
+np.save('results/hist_loss_val_' + savedpath,np.array(hist_loss_val))
+np.save('results/hist_psnr_val_'+savedpath,np.array(hist_psnr_val))
+np.save('results/hist_loss_train_'+ savedpath,np.array(hist_loss_train))
+np.save('results/hist_psnr_train_' + savedpath,np.array(hist_psnr_train))
