@@ -89,6 +89,8 @@ hist_loss_train = []
 hist_loss_val = []
 hist_psnr_train = []
 hist_psnr_val = []
+hist_phyloss_train = []
+hist_phyloss_val = []
 
 best_loss_val = float(999999999)
 best_model = model
@@ -103,6 +105,7 @@ for epoch in range(nb_epochs):
 
     # Train
     avg_psnr = 0
+    avg_phyloss = 0
     epoch_loss = 0
     for iteration, batch in enumerate(tqdm(trainloader)):
         input, target = batch[0].to(device), batch[1].to(device)
@@ -113,19 +116,21 @@ for epoch in range(nb_epochs):
         phy_loss = criterion2(div,torch.zeros_like(div).to(device)) # DO NOT CHANGE THIS ONE. Phy loss has to be L2 norm 
         data_loss = criterion_Data(out, target) # Experiment change to criterion 1
         loss =  data_loss + gama*phy_loss
+        
         loss.backward()
         optimizer.step()
         epoch_loss += loss.item()
         psnr = 10 * np.log10(1 / loss.item())
         avg_psnr += psnr
-
+        avg_phyloss += phy_loss.item()
     print(f"Epoch {epoch}. Training loss: {epoch_loss / len(trainloader)}, Data loss: {data_loss.item()}, Phy Loss: {phy_loss.item()}")
     hist_loss_train.append(epoch_loss / len(trainloader))
     hist_psnr_train.append(avg_psnr / len(trainloader))
+    hist_psnr_train.append(avg_phyloss / len(trainloader))
     #Test
     avg_psnr = 0
     epoch_loss = 0
-    
+    avg_phyloss = 0
     for batch in valloader: # better be the val loader, need to modify datasets, but we are good for now.
         with torch.no_grad():
             input, target = batch[0].to(device), batch[1].to(device)
@@ -138,10 +143,12 @@ for epoch in range(nb_epochs):
             psnr = 10 * np.log10(1 / loss.item())
             epoch_loss += loss.item()
             avg_psnr += psnr
+            avg_phyloss += phy_loss.item()
 
     print(f"Average PSNR: {avg_psnr / len(valloader)} dB.")
     hist_loss_val.append(epoch_loss / len(valloader))
     hist_psnr_val.append(avg_psnr / len(valloader))
+    hist_psnr_val.append(avg_phyloss / len(valloader))
 
     if hist_loss_val[-1] < best_loss_val:
         best_loss_val = hist_loss_val[-1]
@@ -160,3 +167,5 @@ np.save('results/hist_loss_val_' + savedpath,np.array(hist_loss_val))
 np.save('results/hist_psnr_val_'+savedpath,np.array(hist_psnr_val))
 np.save('results/hist_loss_train_'+ savedpath,np.array(hist_loss_train))
 np.save('results/hist_psnr_train_' + savedpath,np.array(hist_psnr_train))
+np.save('results/hist_phyloss_train_'+ savedpath,np.array(hist_phyloss_train))
+np.save('results/hist_phyloss_val_' + savedpath,np.array(hist_phyloss_val))

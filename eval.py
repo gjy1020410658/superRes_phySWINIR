@@ -49,6 +49,7 @@ CROP_SIZE = args.crop_size
 gama = args.phy_scale
 ########### loaddata ############
 _,_,testloader = getdata(BATCH_SIZE = BATCH_SIZE,NUM_WORKERS =NUM_WORKERS,SEED=args.seed,CROP_SIZE = CROP_SIZE,SCALE_FACTOR = scale_factor)
+
 data_dx = 2*np.pi/2048
 
 ########### loaddata ############
@@ -62,6 +63,7 @@ model = SwinIR(upscale=scale_factor, in_chans=3, img_size=CROP_SIZE, window_size
 model = torch.nn.DataParallel(model).to(device)
 model.load_state_dict(checkpoint['model_state_dict'])
 # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+lossgen = LossGenerator(dx=data_dx,kernel_size= args.FD_kernel).to(device,dtype=torch.float64)
 
 epoch_model = checkpoint['epoch']
 loss_model = checkpoint['loss']
@@ -69,6 +71,7 @@ loss_model = checkpoint['loss']
 model.eval()
 avg_psnr = 0
 epoch_loss = 0
+avg_phyloss = 0
 MSEfunc = nn.MSELoss()
 errors_L1 = []
 error_L2 = 0
@@ -80,13 +83,16 @@ with torch.no_grad():
         input, target = batch[0].to(device), batch[1].to(device)
         model.eval()
         out = model(input)
+        div = lossgen.get_div_loss(output=out)
+        phy_loss = MSEfunc(div,torch.zeros_like(div).to(device))
         loss = MSEfunc(out, target)
         top_err += MSEfunc(out, target).item()
         bot_err += MSEfunc(target,torch.zeros_like(target)).item()
         psnr = 10 * np.log10(1 / loss.item())
         epoch_loss += loss.item()
         avg_psnr += psnr
-        
+        avg_phyloss += phy_loss.item()
+
 with open('results/testresult.txt',"a") as ff:
     print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$",file=ff)
     print(args,file=ff)
@@ -94,7 +100,7 @@ with open('results/testresult.txt',"a") as ff:
     print(f"Average PSNR: {avg_psnr / len(testloader)} dB.",file = ff)
     print('relative error: %.6f' % np.sqrt(top_err/bot_err),file = ff)
     print(f"aRMSE: { epoch_loss/len(testloader)} ",file = ff)
-    print()
-    print()
+    print(f"divergence loss: { avg_phyloss/len(testloader)} ",file = ff)
+
     print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$",file=ff)
     ff.close()
