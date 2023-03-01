@@ -27,12 +27,12 @@ from src.get_data import getdata
 
 parser = argparse.ArgumentParser(description='training parameters')
 parser.add_argument('--loss_type', type =str ,default= 'L1')
-parser.add_argument('--phy_scale', type = float, default= 0,help= 'physics loss factor')
+parser.add_argument('--phy_scale', type = float, default= 0.5,help= 'physics loss factor')
 parser.add_argument('--FD_kernel', type = int, default= 3) # or 5
 parser.add_argument('--scale_factor', type = int, default= 8)
-parser.add_argument('--batch_size', type = int, default= 8)
+parser.add_argument('--batch_size', type = int, default= 32)
 parser.add_argument('--crop_size', type = int, default= 128, help= 'should be same as image dimension')
-parser.add_argument('--epochs', type = int, default= 1)
+parser.add_argument('--epochs', type = int, default= 100)
 parser.add_argument('--seed',type =int, default= 0)
 args = parser.parse_args()
 torch.manual_seed(args.seed)

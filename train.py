@@ -28,12 +28,12 @@ from src.get_data import getdata
 
 parser = argparse.ArgumentParser(description='training parameters')
 parser.add_argument('--loss_type', type =str ,default= 'L1')
-parser.add_argument('--phy_scale', type = float, default= 0,help= 'physics loss factor')
+parser.add_argument('--phy_scale', type = float, default= 0.5,help= 'physics loss factor')
 parser.add_argument('--FD_kernel', type = int, default= 3) # or 5
 parser.add_argument('--scale_factor', type = int, default= 8)
-parser.add_argument('--batch_size', type = int, default= 16)
+parser.add_argument('--batch_size', type = int, default= 64)
 parser.add_argument('--crop_size', type = int, default= 128, help= 'should be same as image dimension')
-parser.add_argument('--epochs', type = int, default= 1)
+parser.add_argument('--epochs', type = int, default= 100)
 parser.add_argument('--seed',type =int, default= 0)
 args = parser.parse_args()
 
@@ -91,7 +91,8 @@ hist_psnr_train = []
 hist_psnr_val = []
 hist_phyloss_train = []
 hist_phyloss_val = []
-
+hist_dataloss_train = []
+hist_dataloss_val = []
 best_loss_val = float(999999999)
 best_model = model
 
@@ -107,6 +108,7 @@ for epoch in range(nb_epochs):
     avg_psnr = 0
     avg_phyloss = 0
     epoch_loss = 0
+    avg_dataloss = 0
     for iteration, batch in enumerate(tqdm(trainloader)):
         input, target = batch[0].to(device), batch[1].to(device)
         model.train()
@@ -123,14 +125,17 @@ for epoch in range(nb_epochs):
         psnr = 10 * np.log10(1 / loss.item())
         avg_psnr += psnr
         avg_phyloss += phy_loss.item()
-    print(f"Epoch {epoch}. Training loss: {epoch_loss / len(trainloader)}, Data loss: {data_loss.item()}, Phy Loss: {phy_loss.item()}")
+        avg_dataloss += data_loss.item()
+    print(f"Epoch {epoch}. Training loss: {epoch_loss / len(trainloader)}, Data loss: {avg_dataloss/len(trainloader)}, Phy Loss: {phy_loss.item()}")
     hist_loss_train.append(epoch_loss / len(trainloader))
     hist_psnr_train.append(avg_psnr / len(trainloader))
-    hist_psnr_train.append(avg_phyloss / len(trainloader))
+    hist_phyloss_train.append(avg_phyloss / len(trainloader))
+    hist_dataloss_train.append(avg_dataloss / len(trainloader))
     #Test
     avg_psnr = 0
     epoch_loss = 0
     avg_phyloss = 0
+    avg_dataloss = 0
     for batch in valloader: # better be the val loader, need to modify datasets, but we are good for now.
         with torch.no_grad():
             input, target = batch[0].to(device), batch[1].to(device)
@@ -144,11 +149,12 @@ for epoch in range(nb_epochs):
             epoch_loss += loss.item()
             avg_psnr += psnr
             avg_phyloss += phy_loss.item()
-
+            avg_dataloss += data_loss.item()
     print(f"Average PSNR: {avg_psnr / len(valloader)} dB.")
     hist_loss_val.append(epoch_loss / len(valloader))
     hist_psnr_val.append(avg_psnr / len(valloader))
-    hist_psnr_val.append(avg_phyloss / len(valloader))
+    hist_phyloss_val.append(avg_phyloss / len(valloader))
+    hist_dataloss_val.append(avg_dataloss / len(valloader))
 
     if hist_loss_val[-1] < best_loss_val:
         best_loss_val = hist_loss_val[-1]
@@ -169,3 +175,5 @@ np.save('results/hist_loss_train_'+ savedpath,np.array(hist_loss_train))
 np.save('results/hist_psnr_train_' + savedpath,np.array(hist_psnr_train))
 np.save('results/hist_phyloss_train_'+ savedpath,np.array(hist_phyloss_train))
 np.save('results/hist_phyloss_val_' + savedpath,np.array(hist_phyloss_val))
+np.save('results/hist_dataloss_train_'+ savedpath,np.array(hist_dataloss_train))
+np.save('results/hist_dataloss_val_' + savedpath,np.array(hist_dataloss_val))
